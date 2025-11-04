@@ -1,5 +1,5 @@
-import { X, ChevronLeft, ChevronRight, Edit2, Check, ImageOff } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { X, ChevronLeft, ChevronRight, Edit2, Check, ImageOff, Square, Hand } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { PhotoAssessment, DamageItem } from '../types/assessment';
 
 interface DamageAssessmentModalProps {
@@ -23,6 +23,12 @@ export default function DamageAssessmentModal({
   const [editingDamageId, setEditingDamageId] = useState<string | null>(null);
   const [adjustmentAmount, setAdjustmentAmount] = useState<string>('');
   const [adjustmentReason, setAdjustmentReason] = useState<string>('');
+  const [drawingMode, setDrawingMode] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
+  const [currentBox, setCurrentBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [userBoxes, setUserBoxes] = useState<Array<{ x: number; y: number; width: number; height: number }>>([]);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (initialAssessments.length > 0) {
@@ -59,6 +65,8 @@ export default function DamageAssessmentModal({
     if (!isLastPhoto) {
       setCurrentPhotoIndex(prev => prev + 1);
       resetEditState();
+      setUserBoxes([]);
+      setDrawingMode(false);
     }
   };
 
@@ -66,6 +74,8 @@ export default function DamageAssessmentModal({
     if (!isFirstPhoto) {
       setCurrentPhotoIndex(prev => prev - 1);
       resetEditState();
+      setUserBoxes([]);
+      setDrawingMode(false);
     }
   };
 
@@ -113,6 +123,48 @@ export default function DamageAssessmentModal({
     }
   };
 
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!drawingMode || !imageContainerRef.current) return;
+
+    const rect = imageContainerRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+    setIsDrawing(true);
+    setDrawStart({ x, y });
+    setCurrentBox(null);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDrawing || !drawStart || !imageContainerRef.current) return;
+
+    const rect = imageContainerRef.current.getBoundingClientRect();
+    const currentX = ((e.clientX - rect.left) / rect.width) * 100;
+    const currentY = ((e.clientY - rect.top) / rect.height) * 100;
+
+    const width = Math.abs(currentX - drawStart.x);
+    const height = Math.abs(currentY - drawStart.y);
+    const x = Math.min(currentX, drawStart.x);
+    const y = Math.min(currentY, drawStart.y);
+
+    setCurrentBox({ x, y, width, height });
+  };
+
+  const handleMouseUp = () => {
+    if (!isDrawing || !currentBox) {
+      setIsDrawing(false);
+      return;
+    }
+
+    if (currentBox.width > 2 && currentBox.height > 2) {
+      setUserBoxes(prev => [...prev, currentBox]);
+    }
+
+    setIsDrawing(false);
+    setDrawStart(null);
+    setCurrentBox(null);
+  };
+
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
@@ -138,32 +190,67 @@ export default function DamageAssessmentModal({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Damage Detection</h3>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <span className="text-sm text-gray-600">Show Bounding Boxes</span>
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={showBoundingBoxes}
-                      onChange={(e) => setShowBoundingBoxes(e.target.checked)}
-                      className="sr-only"
-                    />
-                    <div
-                      className={`w-11 h-6 rounded-full transition-colors ${
-                        showBoundingBoxes ? 'bg-indigo-600' : 'bg-gray-300'
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Damage Detection</h3>
+                <div className="flex items-center gap-4">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setDrawingMode(!drawingMode)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        drawingMode
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
                       }`}
+                      title="Draw bounding box"
                     >
-                      <div
-                        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-                          showBoundingBoxes ? 'transform translate-x-5' : ''
-                        }`}
-                      />
-                    </div>
+                      <Square className="w-4 h-4" />
+                      {drawingMode ? 'Drawing' : 'Draw'}
+                    </button>
+                    {drawingMode && (
+                      <button
+                        onClick={() => {
+                          setDrawingMode(false);
+                          setUserBoxes([]);
+                        }}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    )}
                   </div>
-                </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Show AI Boxes</span>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={showBoundingBoxes}
+                        onChange={(e) => setShowBoundingBoxes(e.target.checked)}
+                        className="sr-only"
+                      />
+                      <div
+                        className={`w-11 h-6 rounded-full transition-colors ${
+                          showBoundingBoxes ? 'bg-blue-600' : 'bg-gray-300'
+                        }`}
+                      >
+                        <div
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                            showBoundingBoxes ? 'transform translate-x-5' : ''
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  </label>
+                </div>
               </div>
 
-              <div className="relative bg-gray-900 rounded-lg overflow-hidden aspect-[4/3]">
+              <div
+                ref={imageContainerRef}
+                className="relative bg-gray-900 rounded-lg overflow-hidden aspect-[4/3]"
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                style={{ cursor: drawingMode ? 'crosshair' : 'default' }}
+              >
                 {currentAssessment.photoUrl && !currentAssessment.photoUrl.startsWith('blob:') ? (
                   <>
                     <img
@@ -171,48 +258,97 @@ export default function DamageAssessmentModal({
                       alt={`Damage photo ${currentPhotoIndex + 1}`}
                       className="w-full h-full object-contain"
                     />
-                    {showBoundingBoxes && (
-                      <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                        {currentAssessment.boundingBoxes.map((box) => (
-                          <g key={box.id}>
-                            <rect
-                              x={`${box.x}%`}
-                              y={`${box.y}%`}
-                              width={`${box.width}%`}
-                              height={`${box.height}%`}
-                              fill="none"
-                              stroke="#ef4444"
-                              strokeWidth="3"
-                              opacity="0.8"
-                            />
-                            <rect
-                              x={`${box.x}%`}
-                              y={`${box.y}%`}
-                              width={`${box.width}%`}
-                              height="20"
-                              fill="#ef4444"
-                              opacity="0.8"
-                            />
-                            <text
-                              x={`${box.x + 1}%`}
-                              y={`${box.y}%`}
-                              dy="15"
-                              fill="white"
-                              fontSize="12"
-                              fontWeight="bold"
-                            >
-                              {box.label}
-                            </text>
-                          </g>
-                        ))}
-                      </svg>
-                    )}
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                      {showBoundingBoxes && currentAssessment.boundingBoxes.map((box) => (
+                        <g key={box.id}>
+                          <rect
+                            x={`${box.x}%`}
+                            y={`${box.y}%`}
+                            width={`${box.width}%`}
+                            height={`${box.height}%`}
+                            fill="none"
+                            stroke="#ef4444"
+                            strokeWidth="3"
+                            opacity="0.8"
+                          />
+                          <rect
+                            x={`${box.x}%`}
+                            y={`${box.y}%`}
+                            width={`${box.width}%`}
+                            height="20"
+                            fill="#ef4444"
+                            opacity="0.8"
+                          />
+                          <text
+                            x={`${box.x + 1}%`}
+                            y={`${box.y}%`}
+                            dy="15"
+                            fill="white"
+                            fontSize="12"
+                            fontWeight="bold"
+                          >
+                            {box.label}
+                          </text>
+                        </g>
+                      ))}
+                      {userBoxes.map((box, idx) => (
+                        <g key={`user-${idx}`}>
+                          <rect
+                            x={`${box.x}%`}
+                            y={`${box.y}%`}
+                            width={`${box.width}%`}
+                            height={`${box.height}%`}
+                            fill="none"
+                            stroke="#3b82f6"
+                            strokeWidth="3"
+                            strokeDasharray="8,4"
+                            opacity="0.9"
+                          />
+                          <rect
+                            x={`${box.x}%`}
+                            y={`${box.y}%`}
+                            width={`${box.width}%`}
+                            height="20"
+                            fill="#3b82f6"
+                            opacity="0.8"
+                          />
+                          <text
+                            x={`${box.x + 1}%`}
+                            y={`${box.y}%`}
+                            dy="15"
+                            fill="white"
+                            fontSize="12"
+                            fontWeight="bold"
+                          >
+                            User Marked
+                          </text>
+                        </g>
+                      ))}
+                      {currentBox && (
+                        <rect
+                          x={`${currentBox.x}%`}
+                          y={`${currentBox.y}%`}
+                          width={`${currentBox.width}%`}
+                          height={`${currentBox.height}%`}
+                          fill="none"
+                          stroke="#3b82f6"
+                          strokeWidth="2"
+                          strokeDasharray="8,4"
+                          opacity="0.7"
+                        />
+                      )}
+                    </svg>
                   </>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center bg-gray-800">
                     <ImageOff className="w-16 h-16 text-gray-500 mb-3" />
                     <p className="text-gray-400 text-sm">Photo stored</p>
                     <p className="text-gray-500 text-xs mt-1">Preview not available</p>
+                  </div>
+                )}
+                {drawingMode && (
+                  <div className="absolute top-2 left-2 bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium shadow-lg">
+                    Click and drag to draw bounding box
                   </div>
                 )}
               </div>
