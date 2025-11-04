@@ -116,16 +116,6 @@ The application includes 8 sample claims with various statuses, priorities, and 
 6. **Search and filter claims** - Advanced search and multi-filter capabilities
 7. **Sort claims by priority** - Multiple sort options available
 
-## Future Enhancements (Not Implemented)
-
-Based on the PRD, these features are planned for future releases:
-- Image upload and viewing
-- Real-time AI damage assessment integration
-- Adjuster assignment workflow
-- Approval/rejection workflows with email notifications
-- Advanced analytics and reporting
-- Bulk operations
-- Export functionality
 
 ## Security
 
